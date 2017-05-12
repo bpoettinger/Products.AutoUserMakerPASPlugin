@@ -22,6 +22,8 @@ from Products.PluggableAuthService.plugins.BasePlugin import BasePlugin
 from Products.PluggableAuthService.utils import classImplements
 from random import choice
 from ZODB.POSException import ConflictError
+from Products.PluggableAuthService.events import PrincipalCreated
+from zope.event import notify
 
 import itertools
 import re
@@ -67,6 +69,7 @@ challengeReplacementKey = 'challenge_replacement'
 challengeHeaderEnabledKey = 'challenge_header_enabled'
 challengeHeaderNameKey = 'challenge_header_name'
 defaultRolesKey = 'default_roles'
+firePASEventsKey = 'fire_pas_events'
 levelOfAssuranceKey = 'level_of_assurance'
 
 PWCHARS = string.letters + string.digits + string.punctuation
@@ -214,6 +217,9 @@ class AutoUserMakerPASPlugin(BasePlugin):
                 source_groups = getToolByName(self, 'source_groups')
                 for ii in groups:
                     source_groups.addPrincipalToGroup(user.getId(), ii)
+
+                if user is not None and 'principal_created' in self.getProperty(firePASEventsKey, ()):
+                    notify(PrincipalCreated(user))
         else:
             config = self.getConfig()
             if config.get(autoUpdateUserPropertiesKey, 0):
@@ -340,6 +346,7 @@ class ExtractionPlugin(BasePlugin, PropertyManager):
          'challenge_pattern': 'http://(.*)',
          'challenge_replacement': 'https://\\\\1',
          'default_roles': ('Member',),
+         'fire_pas_events': (),
          'http_authz_tokens': (),
          'http_commonname': ('HTTP_SHIB_PERSON_COMMONNAME',),
          'http_country': ('HTTP_SHIB_ORGPERSON_C',),
@@ -378,6 +385,7 @@ class ExtractionPlugin(BasePlugin, PropertyManager):
             (challengeReplacementKey, 'string', 'w', _defaultChallengeReplacement),
             (challengeHeaderEnabledKey, 'boolean', 'w', False),
             (challengeHeaderNameKey, 'string', 'w', ""),
+            (firePASEventsKey, 'lines', 'w', []),
             (defaultRolesKey, 'lines', 'w', ['Member']),
             (levelOfAssuranceKey, 'lines', 'w', ['HTTP_LOA']))
         # Create any missing properties
@@ -419,6 +427,8 @@ class ExtractionPlugin(BasePlugin, PropertyManager):
             challengeReplacementKey: self.getProperty(challengeReplacementKey),
             challengeHeaderEnabledKey: self.getProperty(challengeHeaderEnabledKey),
             challengeHeaderNameKey: self.getProperty(challengeHeaderNameKey),
+            firePASEventsKey: self.getProperty(firePASEventsKey),
+            defaultRolesKey: self.getProperty(defaultRolesKey),
             defaultRolesKey: self.getProperty(defaultRolesKey),
             levelOfAssuranceKey: self.getProperty(levelOfAssuranceKey)}
 
@@ -775,26 +785,27 @@ class ApacheAuthPluginHandler(AutoUserMakerPASPlugin, ExtractionPlugin):
                 ii['values'] = saveVals
         # Save the form values
         self.manage_changeProperties({stripDomainNamesKey: strip,
-            stripDomainNamesListKey: reqget(stripDomainNamesListKey, ''),
-            httpRemoteUserKey: reqget(httpRemoteUserKey, ''),
-            httpCommonnameKey: reqget(httpCommonnameKey, ''),
-            httpDescriptionKey: reqget(httpDescriptionKey, ''),
-            httpEmailKey: reqget(httpEmailKey, ''),
-            httpLocalityKey: reqget(httpLocalityKey, ''),
-            httpStateKey: reqget(httpStateKey, ''),
-            httpCountryKey: reqget(httpCountryKey, ''),
-            autoUpdateUserPropertiesKey: autoupdate,
-            autoUpdateUserPropertiesIntervalKey: autoupdate_interval,
-            httpAuthzTokensKey: reqget(httpAuthzTokensKey, ''),
-            httpSharingTokensKey: reqget(httpSharingTokensKey, ''),
-            httpSharingLabelsKey: reqget(httpSharingLabelsKey, ''),
-            useCustomRedirectionKey: reqget(useCustomRedirectionKey, False),
-            challengeReplacementKey: reqget(challengeReplacementKey, ''),
-            challengePatternKey: reqget(challengePatternKey, ''),
-            challengeHeaderEnabledKey: reqget(challengeHeaderEnabledKey, False),
-            challengeHeaderNameKey: reqget(challengeHeaderNameKey, ''),
-            defaultRolesKey: reqget(defaultRolesKey, ''),
-            levelOfAssuranceKey: reqget(levelOfAssuranceKey, '')})
+                                      stripDomainNamesListKey: reqget(stripDomainNamesListKey, ''),
+                                      httpRemoteUserKey: reqget(httpRemoteUserKey, ''),
+                                      httpCommonnameKey: reqget(httpCommonnameKey, ''),
+                                      httpDescriptionKey: reqget(httpDescriptionKey, ''),
+                                      httpEmailKey: reqget(httpEmailKey, ''),
+                                      httpLocalityKey: reqget(httpLocalityKey, ''),
+                                      httpStateKey: reqget(httpStateKey, ''),
+                                      httpCountryKey: reqget(httpCountryKey, ''),
+                                      autoUpdateUserPropertiesKey: autoupdate,
+                                      autoUpdateUserPropertiesIntervalKey: autoupdate_interval,
+                                      httpAuthzTokensKey: reqget(httpAuthzTokensKey, ''),
+                                      httpSharingTokensKey: reqget(httpSharingTokensKey, ''),
+                                      httpSharingLabelsKey: reqget(httpSharingLabelsKey, ''),
+                                      useCustomRedirectionKey: reqget(useCustomRedirectionKey, False),
+                                      challengeReplacementKey: reqget(challengeReplacementKey, ''),
+                                      challengePatternKey: reqget(challengePatternKey, ''),
+                                      challengeHeaderEnabledKey: reqget(challengeHeaderEnabledKey, False),
+                                      challengeHeaderNameKey: reqget(challengeHeaderNameKey, ''),
+                                      firePASEventsKey: reqget(firePASEventsKey, ''),
+                                      defaultRolesKey: reqget(defaultRolesKey, ''),
+                                      levelOfAssuranceKey: reqget(levelOfAssuranceKey, '')})
         return REQUEST.RESPONSE.redirect('%s/manage_config' %
                                          self.absolute_url())
 
